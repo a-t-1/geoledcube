@@ -34,18 +34,29 @@
 
 #include "SdFat.h"
 
+// Use built-in SD for SPI modes on Teensy 3.5/3.6.
+// Teensy 4.0 use first SPI port.
+// SDCARD_SS_PIN is defined for the built-in SD on some boards.
+#ifndef SDCARD_SS_PIN
+const uint8_t SD_CS_PIN = SS;
+#else   // SDCARD_SS_PIN
+// Assume built-in SD is used.
+const uint8_t SD_CS_PIN = SDCARD_SS_PIN;
+#endif  // SDCARD_SS_PIN
+
+SdFs sdEx;
+
+// Two files, one for water content and one for precipitation
+FsFile file;
+FsFile file2;
+
 // 6144 B buffer will fit all 32x32x6 leds
 const size_t BUF_DIM = 6144;
 
 // 8,970,240 B file
 // Each file contains data for one year: 365 days x 4 times/day * 6144 leds
-const uint32_t FILE_SIZE = 365UL * 4UL * BUF_DIM;
+// const uint32_t FILE_SIZE = 365UL * 4UL * BUF_DIM;
 
-SdFatSdioEX sdEx;
-
-// Two files, one for water content and one for precipitation
-File file;
-File file2;
 
 // Each has its own buffer
 uint8_t buf[BUF_DIM];
@@ -108,7 +119,7 @@ unsigned long next = 0; // millis of next image
 void setup() {
   Serial.begin(9600);
   //Connect to SD
-  if (!sdEx.begin()) {
+  if (!sdEx.begin(SdioConfig(FIFO_SDIO))) {
     sdEx.initErrorHalt("SdFatSdioEX begin() failed");
   }
   sdEx.chvol();
@@ -148,8 +159,7 @@ void loop() {
     }
     // loop over all 365x4 images in one year (leap years are ignored)
     for (int h = 0; h < (365 * 4 - 1); h++) {
-      while (millis() < next) {} // yes, there are more elegant ways
-      next = millis() + 100;
+
 
       // read 1st image
       if ((int)nb != file.read(buf, nb)) {
@@ -219,6 +229,8 @@ void loop() {
         } // for (int y...
       } // for (int panel...
 
+      while (millis() < next) {} // yes, there are more elegant ways
+      next = millis() + 100;
       backgroundLayer.swapBuffers();
 
     } // for (int h...
